@@ -25,8 +25,13 @@ import { apiConfig } from './auth-config';
       <div *ngIf="isLoggedIn" style="margin-top: 20px;">
         <p>Usuario conectado: <strong>{{ userName }}</strong></p>
         <button (click)="logout()" style="padding: 8px 14px; margin-right: 10px; cursor: pointer;">Cerrar Sesión</button>
-        <button (click)="consultarPedidos()" style="padding: 8px 14px; cursor: pointer; background-color: #107c41; color: white; border: none; border-radius: 4px;">
+        <button (click)="consultarPedidos()" style="padding: 8px 14px; margin-right: 10px; cursor: pointer; background-color: #107c41; color: white; border: none; border-radius: 4px;">
           Consultar Todas las Órdenes
+        </button>
+        
+        <!-- BOTÓN NUEVO PARA EL MICROSERVICIO DE NOTIFICACIONES -->
+        <button (click)="consultarNotificaciones()" style="padding: 8px 14px; cursor: pointer; background-color: #d83b01; color: white; border: none; border-radius: 4px;">
+          Consultar Notificaciones
         </button>
 
         <hr style="margin: 25px 0;">
@@ -40,6 +45,7 @@ import { apiConfig } from './auth-config';
           </button>
         </div>
 
+        <!-- Detalle de la Orden -->
         <div *ngIf="pedidoDetalle" style="background-color: #f9f9f9; padding: 15px; border: 1px solid #ddd; margin-bottom: 20px; border-radius: 4px;">
           <h4>Detalle de Orden Encontrada:</h4>
           <p><strong>ID OT:</strong> {{ pedidoDetalle.otId }}</p>
@@ -49,27 +55,55 @@ import { apiConfig } from './auth-config';
           <p><strong>Total:</strong> \${{ pedidoDetalle.total | number }}</p>
         </div>
 
-        <h3 style="margin-top: 25px;">Listado General de Órdenes (Desde Oracle Cloud):</h3>
-        <table border="1" cellpadding="10" style="border-collapse: collapse; width: 100%;" *ngIf="pedidos.length > 0">
-          <thead style="background-color: #f2f2f2;">
-            <tr>
-              <th>ID OT</th>
-              <th>Cliente</th>
-              <th>Patente</th>
-              <th>Descripción</th>
-              <th>Total (CLP)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let ot of pedidos">
-              <td>{{ ot.otId }}</td>
-              <td>{{ ot.clienteId }}</td>
-              <td>{{ ot.patente }}</td>
-              <td>{{ ot.descripcion }}</td>
-              <td>\${{ ot.total | number }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- TABLA NUEVA: Notificaciones -->
+        <div *ngIf="notificaciones.length > 0">
+          <h3 style="margin-top: 25px; color: #d83b01;">Registro de Notificaciones (Microservicio Auxiliar):</h3>
+          <table border="1" cellpadding="10" style="border-collapse: collapse; width: 100%;">
+            <thead style="background-color: #fcebe5;">
+              <tr>
+                <th>Log ID</th>
+                <th>OT Asignada</th>
+                <th>Cliente ID</th>
+                <th>Canal</th>
+                <th>Payload JSON</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let notif of notificaciones">
+                <td>{{ notif.logId }}</td>
+                <td>{{ notif.otId }}</td>
+                <td>{{ notif.clienteId }}</td>
+                <td>{{ notif.canal }}</td>
+                <td><code style="font-size: 12px; background: #eee; padding: 2px 4px;">{{ notif.payloadJson }}</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Tabla Original: Órdenes de Trabajo -->
+        <div *ngIf="pedidos.length > 0">
+          <h3 style="margin-top: 25px;">Listado General de Órdenes (Desde Oracle Cloud):</h3>
+          <table border="1" cellpadding="10" style="border-collapse: collapse; width: 100%;">
+            <thead style="background-color: #f2f2f2;">
+              <tr>
+                <th>ID OT</th>
+                <th>Cliente</th>
+                <th>Patente</th>
+                <th>Descripción</th>
+                <th>Total (CLP)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let ot of pedidos">
+                <td>{{ ot.otId }}</td>
+                <td>{{ ot.clienteId }}</td>
+                <td>{{ ot.patente }}</td>
+                <td>{{ ot.descripcion }}</td>
+                <td>\${{ ot.total | number }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <p *ngIf="cargando" style="color: #0078d4; font-weight: bold;">Procesando solicitud con API Gateway...</p>
         <p *ngIf="errorMsg" style="color: red;">{{ errorMsg }}</p>
@@ -81,6 +115,7 @@ export class AppComponent implements OnInit {
   isLoggedIn = false;
   userName = '';
   pedidos: any[] = [];
+  notificaciones: any[] = []; // Arreglo para el nuevo módulo
   pedidoDetalle: any = null;
   searchId: string = 'OT-2026-000001';
   cargando = false;
@@ -145,6 +180,7 @@ export class AppComponent implements OnInit {
     this.cargando = true;
     this.errorMsg = '';
     this.pedidoDetalle = null;
+    this.notificaciones = []; // Limpiamos la tabla de notificaciones para no mezclar
 
     this.obtenerToken((token) => {
       const headers = new HttpHeaders({ 'Authorization': `Bearer ${token}` });
@@ -165,6 +201,8 @@ export class AppComponent implements OnInit {
     if (!this.searchId.trim()) return;
     this.cargando = true;
     this.errorMsg = '';
+    this.notificaciones = [];
+    this.pedidos = [];
 
     this.obtenerToken((token) => {
       const headers = new HttpHeaders({ 'Authorization': `Bearer ${token}` });
@@ -176,6 +214,31 @@ export class AppComponent implements OnInit {
         },
         error: (err) => {
           this.errorMsg = `Error ${err.status}: No se encontró la orden indicada`;
+          this.cargando = false;
+        }
+      });
+    });
+  }
+
+  // MÉTODO NUEVO: Consulta el endpoint /api/notificaciones
+  consultarNotificaciones(): void {
+    this.cargando = true;
+    this.errorMsg = '';
+    this.pedidoDetalle = null;
+    this.pedidos = []; // Limpiamos la tabla de pedidos
+
+    this.obtenerToken((token) => {
+      const headers = new HttpHeaders({ 'Authorization': `Bearer ${token}` });
+      // Cambiamos dinámicamente /api/pedidos por /api/notificaciones
+      const urlNotificaciones = apiConfig.uri.replace('/pedidos', '/notificaciones');
+
+      this.http.get<any[]>(urlNotificaciones, { headers }).subscribe({
+        next: (data) => {
+          this.notificaciones = data;
+          this.cargando = false;
+        },
+        error: (err) => {
+          this.errorMsg = `Error ${err.status}: ${err.statusText || 'Error al obtener notificaciones'}`;
           this.cargando = false;
         }
       });
