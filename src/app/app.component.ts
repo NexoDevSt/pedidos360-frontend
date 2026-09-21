@@ -12,7 +12,7 @@ import { apiConfig } from './auth-config';
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div style="padding: 30px; font-family: Arial, sans-serif; max-width: 900px; margin: auto;">
+    <div style="padding: 30px; font-family: Arial, sans-serif; max-width: 950px; margin: auto;">
       <h2>Sistema Pedidos360 - Duoc UC</h2>
 
       <div *ngIf="!isLoggedIn" style="margin-top: 20px;">
@@ -26,18 +26,16 @@ import { apiConfig } from './auth-config';
         <p>Usuario conectado: <strong>{{ userName }}</strong></p>
         <button (click)="logout()" style="padding: 8px 14px; margin-right: 10px; cursor: pointer;">Cerrar Sesión</button>
         <button (click)="consultarPedidos()" style="padding: 8px 14px; margin-right: 10px; cursor: pointer; background-color: #107c41; color: white; border: none; border-radius: 4px;">
-          Consultar Todas las Órdenes
+          Consultar Órdenes (GET)
         </button>
-        
-        <!-- BOTÓN NUEVO PARA EL MICROSERVICIO DE NOTIFICACIONES -->
-        <button (click)="consultarNotificaciones()" style="padding: 8px 14px; cursor: pointer; background-color: #d83b01; color: white; border: none; border-radius: 4px;">
-          Consultar Notificaciones
+        <button (click)="consultarNotificaciones()" style="padding: 8px 14px; margin-right: 10px; cursor: pointer; background-color: #d83b01; color: white; border: none; border-radius: 4px;">
+          Consultar Notificaciones (GET)
         </button>
 
         <hr style="margin: 25px 0;">
 
         <!-- Búsqueda específica por ID de Orden -->
-        <h3>Consultar Orden por ID (Ruta /api/pedidos/&#123;id&#125;):</h3>
+        <h3>Consultar Orden por ID (GET /api/pedidos/&#123;id&#125;):</h3>
         <div style="margin-bottom: 15px;">
           <input [(ngModel)]="searchId" placeholder="Ej: OT-2026-000001" style="padding: 8px; width: 220px; margin-right: 10px;" />
           <button (click)="consultarPedidoPorId()" style="padding: 8px 14px; cursor: pointer; background-color: #0078d4; color: white; border: none; border-radius: 4px;">
@@ -45,9 +43,8 @@ import { apiConfig } from './auth-config';
           </button>
         </div>
 
-        <!-- Detalle de la Orden -->
         <div *ngIf="pedidoDetalle" style="background-color: #f9f9f9; padding: 15px; border: 1px solid #ddd; margin-bottom: 20px; border-radius: 4px;">
-          <h4>Detalle de Orden Encontrada:</h4>
+          <h4>Detalle de Orden:</h4>
           <p><strong>ID OT:</strong> {{ pedidoDetalle.otId }}</p>
           <p><strong>Cliente:</strong> {{ pedidoDetalle.clienteId }}</p>
           <p><strong>Patente:</strong> {{ pedidoDetalle.patente }}</p>
@@ -55,14 +52,33 @@ import { apiConfig } from './auth-config';
           <p><strong>Total:</strong> \${{ pedidoDetalle.total | number }}</p>
         </div>
 
-        <!-- TABLA NUEVA: Notificaciones -->
+        <!-- FORMULARIO POST: EMISIÓN DE NOTIFICACIÓN -->
+        <div style="background-color: #fff4ce; padding: 15px; border: 1px solid #f2c80f; margin-bottom: 25px; border-radius: 4px;">
+          <h4 style="margin-top: 0; color: #795b00;">Crear Nueva Notificación (POST /api/notificaciones):</h4>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+            <input [(ngModel)]="nuevaNotif.otId" placeholder="OT ID (Ej: OT-2026-000001)" style="padding: 6px; width: 170px;" />
+            <input [(ngModel)]="nuevaNotif.clienteId" placeholder="Cliente ID (Ej: CLI-001)" style="padding: 6px; width: 150px;" />
+            <select [(ngModel)]="nuevaNotif.canal" style="padding: 6px;">
+              <option value="email">Email</option>
+              <option value="sms">SMS</option>
+              <option value="push">Push</option>
+            </select>
+            <input [(ngModel)]="nuevaNotif.payloadJson" placeholder="Mensaje / Payload JSON" style="padding: 6px; width: 250px;" />
+            <button (click)="crearNotificacion()" style="padding: 7px 15px; cursor: pointer; background-color: #795b00; color: white; border: none; border-radius: 4px;">
+              Enviar Notificación
+            </button>
+          </div>
+          <p *ngIf="notifCreadaMsg" style="color: green; margin-bottom: 0; font-weight: bold;">{{ notifCreadaMsg }}</p>
+        </div>
+
+        <!-- TABLA: Notificaciones -->
         <div *ngIf="notificaciones.length > 0">
-          <h3 style="margin-top: 25px; color: #d83b01;">Registro de Notificaciones (Microservicio Auxiliar):</h3>
+          <h3 style="margin-top: 20px; color: #d83b01;">Registro de Notificaciones (Microservicio de Eventos/Mensajería):</h3>
           <table border="1" cellpadding="10" style="border-collapse: collapse; width: 100%;">
             <thead style="background-color: #fcebe5;">
               <tr>
                 <th>Log ID</th>
-                <th>OT Asignada</th>
+                <th>OT Asociada</th>
                 <th>Cliente ID</th>
                 <th>Canal</th>
                 <th>Payload JSON</th>
@@ -73,16 +89,16 @@ import { apiConfig } from './auth-config';
                 <td>{{ notif.logId }}</td>
                 <td>{{ notif.otId }}</td>
                 <td>{{ notif.clienteId }}</td>
-                <td>{{ notif.canal }}</td>
+                <td><span style="text-transform: uppercase; font-weight: bold;">{{ notif.canal }}</span></td>
                 <td><code style="font-size: 12px; background: #eee; padding: 2px 4px;">{{ notif.payloadJson }}</code></td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <!-- Tabla Original: Órdenes de Trabajo -->
+        <!-- TABLA: Órdenes de Trabajo -->
         <div *ngIf="pedidos.length > 0">
-          <h3 style="margin-top: 25px;">Listado General de Órdenes (Desde Oracle Cloud):</h3>
+          <h3 style="margin-top: 20px;">Listado de Órdenes de Trabajo (Oracle Cloud DB):</h3>
           <table border="1" cellpadding="10" style="border-collapse: collapse; width: 100%;">
             <thead style="background-color: #f2f2f2;">
               <tr>
@@ -115,11 +131,19 @@ export class AppComponent implements OnInit {
   isLoggedIn = false;
   userName = '';
   pedidos: any[] = [];
-  notificaciones: any[] = []; // Arreglo para el nuevo módulo
+  notificaciones: any[] = [];
   pedidoDetalle: any = null;
   searchId: string = 'OT-2026-000001';
   cargando = false;
   errorMsg = '';
+  notifCreadaMsg = '';
+
+  nuevaNotif = {
+    otId: 'OT-2026-000001',
+    clienteId: 'CLI-001',
+    canal: 'email',
+    payloadJson: '{"mensaje":"Vehiculo listo para entrega"}'
+  };
 
   constructor(
     private authService: MsalService,
@@ -179,8 +203,9 @@ export class AppComponent implements OnInit {
   consultarPedidos(): void {
     this.cargando = true;
     this.errorMsg = '';
+    this.notifCreadaMsg = '';
     this.pedidoDetalle = null;
-    this.notificaciones = []; // Limpiamos la tabla de notificaciones para no mezclar
+    this.notificaciones = [];
 
     this.obtenerToken((token) => {
       const headers = new HttpHeaders({ 'Authorization': `Bearer ${token}` });
@@ -201,6 +226,7 @@ export class AppComponent implements OnInit {
     if (!this.searchId.trim()) return;
     this.cargando = true;
     this.errorMsg = '';
+    this.notifCreadaMsg = '';
     this.notificaciones = [];
     this.pedidos = [];
 
@@ -220,16 +246,15 @@ export class AppComponent implements OnInit {
     });
   }
 
-  // MÉTODO NUEVO: Consulta el endpoint /api/notificaciones
   consultarNotificaciones(): void {
     this.cargando = true;
     this.errorMsg = '';
+    this.notifCreadaMsg = '';
     this.pedidoDetalle = null;
-    this.pedidos = []; // Limpiamos la tabla de pedidos
+    this.pedidos = [];
 
     this.obtenerToken((token) => {
       const headers = new HttpHeaders({ 'Authorization': `Bearer ${token}` });
-      // Cambiamos dinámicamente /api/pedidos por /api/notificaciones
       const urlNotificaciones = apiConfig.uri.replace('/pedidos', '/notificaciones');
 
       this.http.get<any[]>(urlNotificaciones, { headers }).subscribe({
@@ -240,6 +265,32 @@ export class AppComponent implements OnInit {
         error: (err) => {
           this.errorMsg = `Error ${err.status}: ${err.statusText || 'Error al obtener notificaciones'}`;
           this.cargando = false;
+        }
+      });
+    });
+  }
+
+  crearNotificacion(): void {
+    this.cargando = true;
+    this.errorMsg = '';
+    this.notifCreadaMsg = '';
+
+    this.obtenerToken((token) => {
+      const headers = new HttpHeaders({
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      });
+      const urlNotificaciones = apiConfig.uri.replace('/pedidos', '/notificaciones');
+
+      this.http.post<any>(urlNotificaciones, this.nuevaNotif, { headers }).subscribe({
+        next: (creada) => {
+          this.cargando = false;
+          this.notifCreadaMsg = `¡Notificación #${creada.logId || ''} registrada en Oracle exitosamente!`;
+          this.consultarNotificaciones();
+        },
+        error: (err) => {
+          this.cargando = false;
+          this.errorMsg = `Error al registrar notificación (${err.status}): ${err.statusText || 'Fallo de inserción'}`;
         }
       });
     });
